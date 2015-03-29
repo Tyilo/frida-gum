@@ -93,6 +93,38 @@
             return Memory.readUtf8String(api.sel_getName(sel));
         };
 
+        this.isObjCClass = function (ptr) {
+            return classFactory.isObjCClass(ptr);
+        };
+
+        this.isObjCObject = function (ptr) {
+            if (this.isObjCClass(ptr)) {
+                return true;
+            }
+
+            if (ptr & 1) {
+                // XXX: This might be a tagged pointer
+                return false;
+            }
+
+            var klass;
+            try {
+                klass = Memory.readPointer(ptr);
+            } catch (e) {
+                // Couldn't read pointer
+                return false;
+            }
+
+            if (!this.isObjCClass(klass)) {
+                return false;
+            }
+
+            var msize = api.malloc_size(ptr);
+            var isize = api.class_getInstanceSize(klass);
+
+            return msize >= isize;
+        };
+
         initialize.call(this);
     };
 
@@ -133,6 +165,10 @@
             var ch = template.classHandle;
             var klass = classByHandle[ch];
             return new klass(ch, handle);
+        };
+
+        this.isObjCClass = function isObjCClass(ptr) {
+            return classByHandle[ptr] !== undefined;
         };
 
         this.refresh = function refresh() {
@@ -543,7 +579,8 @@
             {
                 module: "libsystem_malloc.dylib",
                 functions: {
-                    "free": ['void', ['pointer']]
+                    "free": ['void', ['pointer']],
+                    "malloc_size": ['uint64', ['pointer']], // returns size_t
                 },
                 variables: {
                 }
@@ -565,7 +602,8 @@
                     "method_getImplementation": ['pointer', ['pointer']],
                     "method_setImplementation": ['pointer', ['pointer', 'pointer']],
                     "sel_getName": ['pointer', ['pointer']],
-                    "sel_registerName": ['pointer', ['pointer']]
+                    "sel_registerName": ['pointer', ['pointer']],
+                    "class_getInstanceSize": ['uint64', ['pointer']], // returns size_t
                 },
                 variables: {
                 }
